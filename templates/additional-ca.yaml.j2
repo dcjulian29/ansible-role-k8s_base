@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ item.item.name }}
+  namespace: kube-system
+type: Opaque
+data:
+  ca.pem: {{ item.content | b64encode }}

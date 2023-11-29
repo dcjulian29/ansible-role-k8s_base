@@ -1,0 +1,56 @@
+---
+k8s_base_certauth: []
+k8s_base_custom_definitions: []
+k8s_base_log_gelf: false
+k8s_base_log_gelf_host: ""
+k8s_base_log_gelf_mode: udp    # udp or tcp
+k8s_base_log_gelf_port: 12201
+k8s_base_log_namespace: logging
+k8s_base_log_version: "2.2.0"
+k8s_base_namespaces: []
+# - testnamespace
+k8s_base_nfs: false
+k8s_base_nfs_path: /opt/nfs-storage
+k8s_base_nfs_server: ""
+k8s_base_roles: []
+# - name: testrole
+#   namespace: testnamespace
+#   resources: ["deployments", "replicasets", "pods"]
+#   users:
+#     - testuser1
+#     - testuser2
+#   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# - name: test-pod-manager
+#   namespace: testnamespace
+#   resources: ["replicasets", "pods"]
+#   users:
+#     - testuser3
+#   verbs: ["get", "list", "update", "patch"]
+# - name: test-deploy-manager
+#   namespace: testnamespace
+#   resources: ["deployments"]
+#   users: []
+# - name: testrole4
+#   namespace: testnamespace
+# - name: read-secrets
+#   cluster: true
+#   resources: ["secrets"]
+#   verbs: ["get", "watch", "list"]
+# - name: read-secrets
+#   cluster: true
+#   do_not_create: true
+#   namespace: testnamespace
+#   users:
+#     - testuser2
+# - name: system:monitoring
+#   cluster: true
+#   do_not_create: true
+#   users:
+#     - testuser4
+# - name: view
+#   cluster: true
+#   do_not_create: true
+#   users:
+#     - testuser1
+k8s_config: "{{ lookup('ansible.builtin.env', 'K8S_AUTH_KUBECONFIG', default=undef()) }}"
+k8s_context: "{{ lookup('ansible.builtin.env', 'K8S_AUTH_CONTEXT', default=undef()) }}"

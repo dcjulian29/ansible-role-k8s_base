@@ -1,0 +1,25 @@
+---
+dependencies: []
+galaxy_info:
+  author: Julian Easterling
+  description: Ansible role to preform the base setup I expect for kubernetes clusters I manage.
+  galaxy_tags:
+    - base
+    - kubernetes
+    - k8s
+    - dcjulian29
+  license: Apache-2.0
+  min_ansible_version: 2.15.1
+  namespace: dcjulian29
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - jammy
+    - name: EL
+      versions:
+        - "9"
+  role_name: k8s_base

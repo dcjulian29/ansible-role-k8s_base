@@ -1,0 +1,174 @@
+---
+- name: Ensure additional certificate authorities are present
+  when:
+    - k8s_base_certauth | length > 0
+    - not ansible_check_mode   # (Bug ansible/ansible#65687)
+  block:
+    - name: Retrieve CA certificate
+      ansible.builtin.uri:
+        return_content: true
+        url: "{{ item.url }}"
+      register: ca_certs
+      loop: "{{ k8s_base_certauth }}"
+
+    - name: Ensure certificate authority is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition: "{{ lookup('template', 'additional-ca.yaml.j2') | from_yaml }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+      with_items: "{{ ca_certs.results }}"
+
+- name: Ensure GELF logging configuration is present
+  when: k8s_base_log_gelf
+  block:
+    - name: Ensure logging namespace is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ k8s_base_log_namespace }}"
+          spec: { }
+          status: { }
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+
+    - name: Ensure logging service account is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: fluent-bit
+            namespace: "{{ k8s_base_log_namespace }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+
+    - name: Ensure logging cluster role is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: fluent-bit-read
+          rules:
+            - apiGroups: [""]
+              resources:
+                - namespaces
+                - pods
+              verbs: ["get", "list", "watch"]
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+
+    - name: Ensure logging cluster role binding is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: fluent-bit-read
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: fluent-bit-read
+          subjects:
+            - kind: ServiceAccount
+              name: fluent-bit
+              namespace: "{{ k8s_base_log_namespace }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+
+    - name: Ensure logging configuration and daemonset is present
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition: "{{ lookup('template', item) | from_yaml }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+      loop:
+        - logging-config.yaml.j2
+        - logging-daemon.yaml.j2
+
+- name: Ensure additional namespaces are present
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'namespace.yaml.j2') | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  with_items: "{{ k8s_base_namespaces }}"
+  when:
+    - k8s_base_namespaces | length > 0
+
+- name: Ensure additional roles are present
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'role.yaml.j2') | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  with_items: "{{ k8s_base_roles }}"
+  when:
+    - k8s_base_roles | length > 0
+    - item.do_not_create is not defined or item.do_not_create | default(true)
+
+- name: Ensure additional role bindings are present
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'rolebinding.yaml.j2') | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  with_subelements:
+    - "{{ k8s_base_roles | selectattr('users', 'defined') | list }}"
+    - users
+  when:
+    - k8s_base_roles | length > 0
+
+- name: Ensure dynamic NFS provisioning is present
+  when: k8s_base_nfs
+  block:
+    - name: Add helm repository
+      kubernetes.core.helm_repository:
+        context: "{{ k8s_context | default(omit) }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+        name: nfs-provisioning
+        state: present
+        url: https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+
+    - name: Ensure namespace is present
+      kubernetes.core.k8s:
+        api_version: v1
+        context: "{{ k8s_context | default(omit) }}"
+        kind: namespace
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+        name: nfs-provisioner-system
+        state: present
+
+    - name: Ensure that the chart is present
+      kubernetes.core.helm:
+        chart_ref: nfs-provisioning/nfs-subdir-external-provisioner
+        context: "{{ k8s_context | default(omit) }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+        name: nfs-provisioner
+        namespace: nfs-provisioner-system
+        set_values:
+          - value: "nfs.server={{ k8s_base_nfs_server }}"
+            value_type: string
+          - value: "nfs.path={{ k8s_base_nfs_path }}"
+            value_type: string
+          - value: nfs.volumeName=nfs-provisioner-root
+            value_type: string
+        update_repo_cache: true
+        wait: true
+
+- name: Ensure additional custom resource definitions are present
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ item | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  with_items: "{{ k8s_base_custom_definitions }}"
+  when:
+    - k8s_base_custom_definitions | length > 0

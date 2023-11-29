@@ -1,0 +1,12 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: {{ 'ClusterRole' if item.cluster is defined and item.cluster else 'Role' }}
+metadata:
+  name: {{ item.name }}
+{% if (item.cluster is defined and item.cluster) == false %}
+  namespace: {{ item.namespace }}
+{% endif %}
+rules:
+  - apiGroups: [""]
+    resources: {{ item.resources | default(['*']) }}
+    verbs: {{ item.verbs | default(['*'])  }}
