@@ -1,9 +1,8 @@
 ---
 apiVersion: v1
-kind: Secret
+kind: ConfigMap
 metadata:
   name: {{ item.item.name }}
-  namespace: kube-system
-type: Opaque
+  namespace: default
 data:
-  ca.pem: {{ item.content | b64encode }}
+  ca.pem: {{ item.content | to_yaml }}
